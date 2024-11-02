@@ -18,7 +18,7 @@ export type RouteResponse = {
   statusCode: number;
   label: string;
   headers: Header[];
-  body?: string;
+  body: string;
   latency: number;
   bodyType: BodyTypes;
   filePath: string;
@@ -63,7 +63,8 @@ export type ResponseRuleOperators =
   | 'regex_i'
   | 'null'
   | 'empty_array'
-  | 'array_includes';
+  | 'array_includes'
+  | 'valid_json_schema';
 
 export type ResponseRule = {
   target: ResponseRuleTargets;
