@@ -94,9 +94,7 @@ export class OpenAPIConverter {
           endpoint = '/' + route.endpoint.replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
         }
 
-        if (!paths[endpoint]) {
-          paths[endpoint] = {};
-        }
+        paths[endpoint] ??= {};
 
         (paths[endpoint] as OpenAPIV3.OperationObject)[route.method] = {
           description: route.documentation,
@@ -188,7 +186,8 @@ export class OpenAPIConverter {
     port?: number
   ): Environment {
     const newEnvironment = BuildEnvironment({
-      hasDefaultHeader: false,
+      hasContentTypeHeader: false,
+      hasCorsHeaders: true,
       hasDefaultRoute: false,
       port
     });
@@ -224,7 +223,8 @@ export class OpenAPIConverter {
     port?: number
   ): Environment {
     const newEnvironment = BuildEnvironment({
-      hasDefaultHeader: false,
+      hasContentTypeHeader: false,
+      hasCorsHeaders: true,
       hasDefaultRoute: false,
       port
     });
@@ -498,9 +498,7 @@ export class OpenAPIConverter {
    */
   private v3ParametersReplace(
     str: string,
-    parameters:
-      | { [variable in string]: OpenAPIV3.ServerVariableObject }
-      | undefined
+    parameters: Record<string, OpenAPIV3.ServerVariableObject> | undefined
   ) {
     return str.replace(/{(\w+)}/gi, (searchValue, replaceValue) =>
       parameters ? parameters[replaceValue].default : ''

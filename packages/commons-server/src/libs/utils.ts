@@ -1,3 +1,4 @@
+import { search } from '@jmespath-community/jmespath';
 import {
   Callback,
   Folder,
@@ -9,6 +10,7 @@ import {
   ParsedJSONBodyMimeTypes,
   ParsedXMLBodyMimeTypes,
   Route,
+  RouteType,
   stringIncludesArrayItems,
   Transaction
 } from '@mockoon/commons';
@@ -26,33 +28,6 @@ import { parse as parseUrl, URL } from 'url';
 import { xml2js } from 'xml-js';
 import { brotliDecompressSync, inflateSync, unzipSync } from 'zlib';
 import { ServerRequest } from './requests';
-
-/* filterRE is used to match each individual filter expression */
-const FILTER_RE = new RegExp(
-  '^' +
-    // Group 1: Allow l.h.s names like - @price or @.group or @['Account Name'] or length-1 or @.match(/regex/)
-    // Keys with spaces are allowed
-    "(@{0,1}\\.{0,1}[_a-zA-Z0-9\\-\\[\\]\\.]*|@{0,1}\\['[_a-zA-Z0-9\\s]*'\\]|@[a-zA-Z0-9_\\s'\\-\\[\\]]*.match\\(.*\\))" +
-    '\\s*' + // ignore any whitespaces before the operator
-    // Group 2 (optional): Supported operators ===, !==, <, >, <=, >=
-    '(===|!==|<|<=|>|>=)?' +
-    '\\s*' + // ignore any whitespaces after the operator
-    // Group 3 (optional): Supported r.h.s - single/double quoted strings, numbers, boolean, undefined,
-    // reference to other properties like @. or $.
-    // Keys with spaces are allowed
-    "(\"[^\"]*\"|'[^']*'|[0-9.]+|@{0,1}\\${0,1}[\\.a-zA-Z0-9_\\[\\]\\s']*|true|false|undefined)?" +
-    '$'
-);
-
-/*
- * groupRE is used to capture each individual filter in case && or || are being used
- * Returns individual filter expression groups (value without ())
- */
-const GROUP_RE = new RegExp(
-  '([^&\\|]+)' + // Match everything which is not & or |
-    '(?= && | \\|\\| |$)', // Non capturing group matching ' && ' or ' || ' or EOL
-  'g'
-);
 
 /**
  * Transform http headers objects to Mockoon's Header key value object
@@ -272,13 +247,13 @@ export const FromBase64 = (base64: string): string =>
   Buffer.from(base64, 'base64').toString('utf-8');
 
 /**
- * Convert a SafeString to a string if needed.
+ * Extract the string value from a SafeString
  *
- * @param text
+ * @param value
  * @returns
  */
-export const fromSafeString = (text: string | SafeString) =>
-  text instanceof SafeString ? text.toString() : text;
+export const fromSafeString = (value: any | SafeString) =>
+  value instanceof SafeString ? value.toString() : value;
 
 /**
  * Parse a number from a SafeString if needed.
@@ -339,7 +314,7 @@ export const resolvePathFromEnvironment = (
  * {
  *   get: {
  *     a: {
- *       'propery.with.dots': "value"
+ *       'property.with.dots': "value"
  *     }
  *   }
  * }
@@ -360,19 +335,25 @@ export const convertPathToArray = (str: string): string | string[] => {
 /**
  * List routes in the order they appear in a folder children array (can be called recursively)
  *
- * If exclude is provided, it will exclude the routes with the provided UUIDs, or the routes in the provided folders by keyword in the folder name
+ * If excludeList is provided, it will exclude the routes with the provided UUIDs,
+ * or the routes in the provided folders by keyword in the folder name.
+ * A wildcard '*' can be used to exclude all routes.
+ *
+ * If filterByType is provided, it will only return routes of the specified type.
  *
  * @param folderChildren
  * @param allFolders
  * @param allRoutes
- * @param exclude
+ * @param excludeList
+ * @param filterByType
  * @returns
  */
 export const routesFromFolder = (
   folderChildren: FolderChild[],
   allFolders: Folder[],
   allRoutes: Route[],
-  exclude: string[] = []
+  excludeList: string[] = [],
+  filterByType?: RouteType[]
 ): Route[] => {
   const routesList: Route[] = [];
 
@@ -381,8 +362,10 @@ export const routesFromFolder = (
       const foundRoute = allRoutes.find(
         (route) =>
           route.uuid === folderChild.uuid &&
-          !exclude.includes(route.uuid) &&
-          !exclude.includes(route.endpoint)
+          (!filterByType || filterByType.includes(route.type)) &&
+          !excludeList.includes(route.uuid) &&
+          !excludeList.some((exclude) => route.endpoint.includes(exclude)) &&
+          !excludeList.includes('*')
       );
 
       if (foundRoute) {
@@ -391,7 +374,9 @@ export const routesFromFolder = (
     } else {
       const subFolder = allFolders.find(
         (folder) =>
-          folder.uuid === folderChild.uuid && !exclude.includes(folder.name)
+          folder.uuid === folderChild.uuid &&
+          !excludeList.some((exclude) => folder.name.includes(exclude)) &&
+          !excludeList.includes('*')
       );
 
       if (subFolder) {
@@ -400,7 +385,7 @@ export const routesFromFolder = (
             subFolder.children,
             allFolders,
             allRoutes,
-            exclude
+            excludeList
           )
         );
       }
@@ -468,22 +453,58 @@ export const fullTextSearch = (object: unknown, query: string): boolean => {
  * @returns {boolean} - whether JSONPath string is safe or not
  */
 export const isSafeJSONPath = (path: string): boolean => {
+  /* filterRE is used to match each individual filter expression */
+  const FILTER_RE = new RegExp(
+    '^' +
+      // eventually wrapped in parentheses: e.g. (@property === 'price')
+      '[(]*' +
+      // Group 1: Allow l.h.s names like - @price or @.group or @['Account Name'] or length-1 or @.match(/regex/)
+      // Keys with spaces are allowed
+      "(@{0,1}\\.{0,1}[_a-zA-Z0-9\\-\\[\\]\\.]*|@{0,1}\\['[_a-zA-Z0-9\\s]*'\\]|@[a-zA-Z0-9_\\s'\\-\\[\\]\\.]*.match\\(.*\\))" +
+      '\\s*' + // ignore any whitespaces before the operator
+      // Group 2 (optional): Supported operators ==, !=, ===, !==, <, >, <=, >=
+      '(==|!=|===|!==|<|<=|>|>=)?' +
+      '\\s*' + // ignore any whitespaces after the operator
+      // Group 3 (optional): Supported r.h.s - single/double quoted strings, numbers, boolean, undefined,
+      // reference to other properties like @. or $.
+      // Keys with spaces are allowed
+      "(\"[^\"]*\"|'[^']*'|[0-9.]+|@{0,1}\\${0,1}[\\.a-zA-Z0-9_\\[\\]\\s']*|true|false|undefined)?" +
+      // eventually wrapped in parentheses: e.g. (@property === 'price')
+      '[)]*' +
+      '$'
+  );
+
+  /*
+   * groupRE is used to capture each individual filter in case && or || are being used
+   * Returns individual filter expression groups (value without ())
+   */
+  const GROUP_RE = new RegExp(
+    '\\s*&&\\s*|\\s*\\|\\|\\s*', // Non capturing group matching ' && ' or ' || ' or EOL
+    'g'
+  );
+
   if (path.length > 1000) {
     return false;
   }
 
   const hasFilter = (/\((.*)\)/.exec(path) ?? [])[1];
+
   if (!hasFilter) {
     return true;
   }
-  const filters = hasFilter.match(GROUP_RE);
+
+  const filters = hasFilter.split(GROUP_RE);
+
   if (!filters) {
     return true;
   }
+
   let isValid = true;
+
   // Recursively test each filter expression
   for (let filter of filters) {
     filter = filter.trim();
+
     if (!FILTER_RE.test(filter)) {
       isValid = false;
     }
@@ -530,6 +551,84 @@ export const getValueFromPath = (
 };
 
 /**
+ * Look for a value in an object or array using JMESPath.
+ *
+ * @param data
+ * @param path
+ * @param defaultValue
+ * @returns
+ */
+getValueFromPath.jmesPath = (data: any, path: string, defaultValue: any) => {
+  if (
+    (Array.isArray(data) || typeof data === 'object') &&
+    typeof path === 'string' &&
+    path !== ''
+  ) {
+    let foundValue: any;
+
+    try {
+      foundValue = search(data, path);
+    } catch (_error) {
+      // silently fail if the path is invalid (same as JSONPath)
+    }
+
+    // JMESPath returns null if the value is not found (unlike JSONPath which returns undefined)
+    return foundValue ?? defaultValue;
+  }
+
+  return data;
+};
+
+/**
+ * Look for a value in an object or array using JSONPath.
+ *
+ * @param data
+ * @param path
+ * @param defaultValue
+ * @returns
+ */
+getValueFromPath.jsonPath = (data: any, path: string, defaultValue: any) => {
+  if (
+    (Array.isArray(data) || typeof data === 'object') &&
+    typeof path === 'string' &&
+    path !== ''
+  ) {
+    let foundValue: any;
+
+    if (isSafeJSONPath(path)) {
+      // Added wrap = false (Check https://github.com/mockoon/mockoon/issues/1297)
+      foundValue = JSONPath({ json: data, path: path, wrap: false });
+    }
+
+    return foundValue !== undefined ? foundValue : defaultValue;
+  }
+
+  return data;
+};
+
+/**
+ * Get a value from an object or array using object-path.
+ *
+ * @param data
+ * @param path
+ * @param defaultValue
+ * @returns
+ */
+getValueFromPath.objectPath = (data: any, path: string, defaultValue: any) => {
+  if (
+    (Array.isArray(data) || typeof data === 'object') &&
+    typeof path === 'string' &&
+    path !== ''
+  ) {
+    const foundValue = objectGet(data, convertPathToArray(path));
+
+    return foundValue !== undefined ? foundValue : defaultValue;
+  }
+
+  return data;
+};
+
+/**
  * Returns data based on the content type.
  *
  * @param data
@@ -565,7 +664,7 @@ export const parseWebSocketMessage = (
 };
 
 /**
- * Returns appropiate object by parsing it as necessary.
+ * Returns appropriate object by parsing it as necessary.
  * This will check content-type header and will parse messageData based on the type.
  *
  * @param data
@@ -575,7 +674,7 @@ export const parseRequestMessage = (
   data: string,
   request?: ServerRequest
 ): any => {
-  const contentType = request?.header('content-type');
+  const contentType = request?.header('content-type') as string;
 
   return parseByContentType(data, contentType);
 };

@@ -91,7 +91,10 @@ export const configs = [
         }
       ],
       '@typescript-eslint/no-use-before-define': 'error',
-      '@typescript-eslint/unified-signatures': 'error',
+      '@typescript-eslint/unified-signatures': [
+        'error',
+        { ignoreDifferentlyNamedParameters: true }
+      ],
       '@typescript-eslint/consistent-type-definitions': 'off',
       '@typescript-eslint/no-require-imports': [
         'error',
@@ -101,7 +104,8 @@ export const configs = [
       '@typescript-eslint/prefer-nullish-coalescing': [
         'error',
         {
-          ignorePrimitives: true
+          ignorePrimitives: true,
+          ignoreIfStatements: true
         }
       ],
       '@typescript-eslint/prefer-regexp-exec': 'off',

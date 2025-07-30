@@ -33,6 +33,7 @@ import domain from './domain';
 import email from './email';
 import eq from './eq';
 import filter from './filter';
+import find from './find';
 import firstName from './firstName';
 import float from './float';
 import floor from './floor';
@@ -47,8 +48,10 @@ import int from './int';
 import ipv4 from './ipv4';
 import ipv6 from './ipv6';
 import isValidDate from './isValidDate';
+import jmesPath from './jmes-path';
 import join from './join';
 import jsonParse from './json-parse';
+import jsonPath from './json-path';
 import { jwtHeader, jwtPayload } from './jwt';
 import lastName from './lastName';
 import lat from './lat';
@@ -63,7 +66,9 @@ import multiply from './multiply';
 import newline from './newline';
 import now from './now';
 import object from './object';
+import objectPath from './object-path';
 import objectId from './objectId';
+import objectMerge from './objectMerge';
 import oneOf from './oneOf';
 import padEnd from './padEnd';
 import padStart from './padStart';
@@ -116,6 +121,7 @@ export const Helpers = {
   email,
   eq,
   filter,
+  find,
   firstName,
   float,
   floor,
@@ -131,8 +137,10 @@ export const Helpers = {
   int,
   ipv4,
   ipv6,
+  jmesPath,
   join,
   jsonParse,
+  jsonPath,
   jwtHeader,
   jwtPayload,
   lastName,
@@ -149,6 +157,8 @@ export const Helpers = {
   now,
   object,
   objectId,
+  objectMerge,
+  objectPath,
   oneOf,
   padEnd,
   padStart,

@@ -1,13 +1,19 @@
-import { Environment } from './environment.model';
 import { FakerAvailableLocales } from './faker.model';
 import { Header, Methods } from './route.model';
 
 export type ProcessedDatabucket = {
+  uuid: string;
   id: string;
   name: string;
   value: any;
   parsed: boolean;
+  validJson: boolean;
 };
+
+export type ProcessedDatabucketWithoutValue = Omit<
+  ProcessedDatabucket,
+  'value'
+>;
 
 /**
  * Object containing invoked callback details.
@@ -81,19 +87,15 @@ export type Transaction = {
 export type ServerOptions = {
   /**
    * Directory where to find the environment file.
+   * Provide an absolute path to the environment file to avoid false positives when detecting path traversal.
    */
-  environmentDirectory?: string;
+  environmentDirectory: string;
 
   /**
    * List of routes uuids to disable.
    * Can also accept strings containing a route partial path, e.g. 'users' will disable all routes containing 'users' in their path.
    */
   disabledRoutes?: string[];
-
-  /**
-   * Method used by the library to refresh the environment information
-   */
-  refreshEnvironmentFunction?: (environmentUUID: string) => Environment | null;
 
   /**
    * Faker options: seed and locale

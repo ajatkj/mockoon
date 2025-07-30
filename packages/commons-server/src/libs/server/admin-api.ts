@@ -1,56 +1,56 @@
-import { Transaction } from '@mockoon/commons';
+import { Environment, EnvironmentSchema, Transaction } from '@mockoon/commons';
 import { Express, Request, Response } from 'express';
+import { MockoonServer } from './server';
+import { Sse } from './sse';
 
 /**
  * Creates the Admin API endpoints
- * Documentation: https://mockoon.com/docs/latest/admin-api/overview/
- *
- * PURGE /mockoon-admin/state
- * POST /mockoon-admin/state/purge
- *
- * POST /mockoon-admin/env-vars
- * PUT /mockoon-admin/env-vars
- * PATCH /mockoon-admin/env-vars
- *
- * POST /mockoon-admin/global-vars
- * PUT /mockoon-admin/global-vars
- * PATCH /mockoon-admin/global-vars
- * PURGE /mockoon-admin/global-vars
- * POST /mockoon-admin/global-vars/purge
- *
- * PURGE /mockoon-admin/data-buckets
- * POST /mockoon-admin/data-buckets/purge
- *
- * GET /mockoon-admin/logs
- * PURGE /mockoon-admin/logs
- * POST /mockoon-admin/logs/purge
- *
+ * Documentation: https://mockoon.com/docs/latest/admin-api/overview/ *
  */
 export const createAdminEndpoint = (
   app: Express,
+  serverInstance: MockoonServer,
   {
     statePurgeCallback,
     getGlobalVariables,
     setGlobalVariables,
     purgeGlobalVariables,
+    getDataBucket,
     getDataBuckets,
     purgeDataBuckets,
     getLogs,
     purgeLogs,
-    envVarsPrefix
+    envVarsPrefix,
+    updateEnvironment
   }: {
     statePurgeCallback: () => void;
     getGlobalVariables: (key: string) => any;
     setGlobalVariables: (key: string, value: any) => void;
     purgeGlobalVariables: () => void;
-    getDataBuckets: (nameOrId: string) => any;
+    getDataBucket: (nameOrId: string) => any;
+    getDataBuckets: () => any;
     purgeDataBuckets: () => void;
     getLogs: () => Transaction[];
     purgeLogs: () => void;
     envVarsPrefix: string;
+    updateEnvironment: (environment: Environment) => void;
   }
 ): void => {
   const adminApiPrefix = '/mockoon-admin';
+  const events = new Sse();
+
+  app.use(`${adminApiPrefix}*`, (req, res, next) => {
+    res.setHeaders(
+      new Headers({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods':
+          'GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS',
+        'Access-Control-Allow-Headers':
+          'Content-Type, Origin, Accept, Authorization, Content-Length, X-Requested-With'
+      })
+    );
+    next();
+  });
 
   app.get(adminApiPrefix, (req, res) => {
     res.send({
@@ -58,6 +58,21 @@ export const createAdminEndpoint = (
         "Welcome to Mockoon's admin API. Check the documentation at https://mockoon.com/docs/latest/admin-api/overview/ for more information."
     });
   });
+
+  serverInstance.on('stopped', () => {
+    events.close();
+  });
+
+  // listen to server events and send them through the SSE
+  serverInstance.on('transaction-complete', (transaction) => {
+    events.send({ event: 'transaction-complete', transaction });
+  });
+
+  serverInstance.on('data-bucket-processed', (dataBuckets) => {
+    events.send({ event: 'data-bucket-processed', dataBuckets }, true);
+  });
+
+  app.get(`${adminApiPrefix}/events`, events.requestListener);
 
   const stateEndpoint = `${adminApiPrefix}/state`;
   const purgeHandler = (req, res) => {
@@ -189,23 +204,38 @@ export const createAdminEndpoint = (
   };
 
   /**
-   * Get a data bucket current parsed value
+   * Get data buckets current states (without value)
    *
    * @param req
    * @param res
    */
   const getDataBucketsHandler = (req, res) => {
+    const buckets = getDataBuckets();
+
+    res.send(
+      buckets.map((bucket) => ({
+        id: bucket.id,
+        name: bucket.name,
+        parsed: bucket.parsed,
+        validJson: bucket.validJson
+      }))
+    );
+  };
+
+  /**
+   * Get a data bucket current parsed value
+   *
+   * @param req
+   * @param res
+   */
+  const getDataBucketHandler = (req, res) => {
     const nameOrId = req.params.nameOrId;
 
     if (nameOrId) {
-      const bucket = getDataBuckets(nameOrId);
+      const bucket = getDataBucket(nameOrId);
 
       if (bucket) {
-        res.send({
-          name: bucket.name,
-          id: bucket.id,
-          value: bucket.value
-        });
+        res.send(bucket);
       } else {
         res.status(404).send({ message: 'Data bucket not found' });
       }
@@ -290,7 +320,45 @@ export const createAdminEndpoint = (
   app.post(`${adminApiPrefix}/global-vars/purge`, purgeGlobalVarsHandler);
 
   // data buckets endpoints
-  app.get(`${adminApiPrefix}/data-buckets/:nameOrId`, getDataBucketsHandler);
+  app.get(`${adminApiPrefix}/data-buckets`, getDataBucketsHandler);
+  app.get(`${adminApiPrefix}/data-buckets/:nameOrId`, getDataBucketHandler);
   app.purge(`${adminApiPrefix}/data-buckets`, purgeDataBucketsHandler);
   app.post(`${adminApiPrefix}/data-buckets/purge`, purgeDataBucketsHandler);
+
+  /**
+   * Update the environment
+   *
+   * Note: not everything can be updated during runtime, only:
+   * - some environment properties (headers, proxy headers, latency, etc.)
+   * - route responses (headers, latency, status code, etc.)
+   * - some route properties (response mode)
+   *
+   * What cannot be updated:
+   * - route paths and methods
+   * - environment port, hostname, and proxy target
+   * - adding or removing routes
+   * - data buckets
+   * - callbacks
+   */
+  app.put(`${adminApiPrefix}/environment`, (req, res) => {
+    try {
+      const environment: Environment = EnvironmentSchema.validate(
+        req.body
+      ).value;
+
+      if (!environment) {
+        res.status(400).send({ message: 'Invalid environment format' });
+
+        return;
+      }
+
+      updateEnvironment(environment);
+
+      res.send({
+        message: 'Environment updated'
+      });
+    } catch (_error) {
+      res.status(400).send({ message: 'Invalid environment format' });
+    }
+  });
 };

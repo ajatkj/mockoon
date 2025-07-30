@@ -1,17 +1,11 @@
-export type Banner = {
-  id: string;
-  enabled: boolean;
-  text: string;
-  link: string;
-  classes?: string;
-  styles?: Record<string, string>;
-  iconName?: string;
-};
+import { DeployRegions } from './deploy-instance.model';
 
 export type RemoteConfigData = {
-  banner: Banner | null;
   enableTelemetry: boolean;
-  geoipEndpoint: string;
+  geoipEndpoint?: string;
   cloudSyncUrl?: string;
   deployUrl?: string;
+  dataRefreshInterval?: number;
+  regions?: { label: string; value: DeployRegions }[];
+  defaultRegion?: DeployRegions;
 };

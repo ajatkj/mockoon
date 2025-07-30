@@ -633,7 +633,9 @@ describe('Response rules interpreter', () => {
             id: GenerateUniqueID(),
             name: 'RuleBucket',
             value: { prop: 'value' },
-            parsed: true
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
@@ -679,7 +681,9 @@ describe('Response rules interpreter', () => {
             id: GenerateUniqueID(),
             name: 'RuleBucket',
             value: { prop: 'value' },
-            parsed: false
+            parsed: false,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
@@ -721,6 +725,112 @@ describe('Response rules interpreter', () => {
         null,
         EnvironmentDefault,
         [],
+        {},
+        ''
+      ).chooseResponse(1);
+
+      strictEqual(routeResponse?.body, 'value');
+    });
+
+    it('should return response if full query params (no path) matches a JSON schema', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = { 'Content-Type': 'application/json' };
+
+          return headers[headerName];
+        },
+        body: '',
+        query: { prop1: 'value1', prop2: 'value2' } as QueryString.ParsedQs
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'query',
+                modifier: '',
+                value: 'schema',
+                operator: 'valid_json_schema',
+                invert: false
+              }
+            ],
+            body: 'value'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [
+          {
+            name: 'schema',
+            id: 'abcd',
+            value: {
+              type: 'object',
+              properties: {
+                prop1: { type: 'string' },
+                prop2: { type: 'string' }
+              },
+              required: ['prop1', 'prop2'],
+              additionalProperties: false
+            },
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
+          }
+        ],
+        {},
+        ''
+      ).chooseResponse(1);
+
+      strictEqual(routeResponse?.body, 'value');
+    });
+
+    it('should return response if query params (with path) matches a JSON schema', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = { 'Content-Type': 'application/json' };
+
+          return headers[headerName];
+        },
+        body: '',
+        query: { prop1: 'value1', prop2: 'value2' } as QueryString.ParsedQs
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'query',
+                modifier: 'prop1',
+                value: 'schema',
+                operator: 'valid_json_schema',
+                invert: false
+              }
+            ],
+            body: 'value'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [
+          {
+            name: 'schema',
+            id: 'abcd',
+            value: {
+              type: 'string'
+            },
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
+          }
+        ],
         {},
         ''
       ).chooseResponse(1);
@@ -1223,7 +1333,9 @@ describe('Response rules interpreter', () => {
             id: GenerateUniqueID(),
             name: 'Best Bucket',
             value: { onRequest: { returnStatusCode: 204 } },
-            parsed: true
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
@@ -1259,7 +1371,9 @@ describe('Response rules interpreter', () => {
             id: bucketId,
             name: 'bucket',
             value: [{ key: 'value' }],
-            parsed: true
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
@@ -1882,7 +1996,8 @@ describe('Response rules interpreter', () => {
         header: function (_headerName: string) {
           return '';
         },
-        url: '/test/1'
+        url: '/test/1',
+        route: { path: '/test/:id' }
       } as Request;
 
       const routeResponse = new ResponseRulesInterpreter(
@@ -1912,12 +2027,49 @@ describe('Response rules interpreter', () => {
       strictEqual(routeResponse?.body, 'path1');
     });
 
+    it('should return response if path equals value', () => {
+      const request: Request = {
+        header: function (_headerName: string) {
+          return '';
+        },
+        url: '/test/1',
+        route: { path: '/test/:id' }
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'path',
+                modifier: '',
+                value: '/test/:id',
+                operator: 'equals',
+                invert: false
+              }
+            ],
+            body: 'path1'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'path1');
+    });
+
     it('should return response if path contains value (regex)', () => {
       const request: Request = {
         header: function (_headerName: string) {
           return '';
         },
-        url: '/test/2'
+        url: '/test/2',
+        route: { path: '/test/:id' }
       } as Request;
 
       const routeResponse = new ResponseRulesInterpreter(
@@ -1930,6 +2082,42 @@ describe('Response rules interpreter', () => {
                 target: 'path',
                 modifier: '',
                 value: '1|2',
+                operator: 'regex',
+                invert: false
+              }
+            ],
+            body: 'path2'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'path2');
+    });
+
+    it('should return response if path contains value (regex)', () => {
+      const request: Request = {
+        header: function (_headerName: string) {
+          return '';
+        },
+        url: '/test/2',
+        route: { path: '/test/:id' }
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'path',
+                modifier: '',
+                value: ':id',
                 operator: 'regex',
                 invert: false
               }
@@ -2487,6 +2675,84 @@ describe('Response rules interpreter', () => {
     const xmlBody =
       '<?xml version="1.0" encoding="utf-8"?><user userId="1"><name>John</name></user>';
 
+    it('should return response if full body is null (req content type absent)', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = {};
+
+          return headers[headerName];
+        },
+        stringBody: '',
+        body: ''
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'body',
+                modifier: '',
+                value: '',
+                operator: 'null',
+                invert: false
+              }
+            ],
+            body: 'body1'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'body1');
+    });
+
+    it('should return response if full body is null (req content type present)', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = {
+            'Content-Type': 'application/json'
+          };
+
+          return headers[headerName];
+        },
+        stringBody: '',
+        body: ''
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'body',
+                modifier: '',
+                value: '',
+                operator: 'null',
+                invert: false
+              }
+            ],
+            body: 'body1'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'body1');
+    });
+
     it('should return response if full body value matches (no modifier + regex)', () => {
       const request: Request = {
         header: function (headerName: string) {
@@ -2645,6 +2911,46 @@ describe('Response rules interpreter', () => {
         ''
       ).chooseResponse(1);
       strictEqual(routeResponse?.body, 'unauthorized');
+    });
+
+    it('should return default response if full body (JSON) value matches (no modifier)', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = {
+            'Content-Type': 'application/json'
+          };
+
+          return headers[headerName];
+        },
+        stringBody: '{"name":"john"}',
+        body: { name: 'john' }
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'body',
+                modifier: '',
+                value: '{"name":"john"}',
+                operator: 'equals',
+                invert: false
+              }
+            ],
+            body: 'body'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'body');
     });
 
     it('should return response if JSON body property value matches (no regex)', () => {
@@ -3247,7 +3553,7 @@ describe('Response rules interpreter', () => {
       strictEqual(routeResponse?.body, 'body19');
     });
 
-    it('should return response if JSON body property value is null nad rule value is null too', () => {
+    it('should return response if JSON body property value is null and rule value is null too', () => {
       const request: Request = {
         header: function (headerName: string) {
           const headers = {
@@ -3464,6 +3770,7 @@ describe('Response rules interpreter', () => {
       ).chooseResponse(1);
       strictEqual(routeResponse?.body, 'body6');
     });
+
     it('should return response if JSON body path extracted using jsonpath matches', () => {
       const request: Request = {
         header: function (headerName: string) {
@@ -3544,6 +3851,175 @@ describe('Response rules interpreter', () => {
       strictEqual(routeResponse?.body, 'response1');
     });
 
+    it('should return response if operator is "valid_json_schema" and schema is valid without path', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = { 'Content-Type': 'application/json' };
+
+          return headers[headerName];
+        },
+        body: {
+          foo: 1,
+          bar: 'abc'
+        },
+        query: { prop: undefined, examples: [] } as QueryString.ParsedQs
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'body',
+                modifier: '',
+                value: 'schema',
+                operator: 'valid_json_schema',
+                invert: false
+              }
+            ],
+            body: 'response1'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [
+          {
+            name: 'schema',
+            id: 'w63q',
+            value: {
+              type: 'object',
+              properties: {
+                foo: { type: 'integer' },
+                bar: { type: 'string' }
+              },
+              required: ['foo'],
+              additionalProperties: false
+            },
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
+          }
+        ],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'response1');
+    });
+
+    it('should return response if operator is "valid_json_schema" and schema is valid without path and using a specific format (email)', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = { 'Content-Type': 'application/json' };
+
+          return headers[headerName];
+        },
+        body: {
+          email: 'test@example.org'
+        }
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'body',
+                modifier: '',
+                value: 'schema',
+                operator: 'valid_json_schema',
+                invert: false
+              }
+            ],
+            body: 'response1'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [
+          {
+            name: 'schema',
+            id: 'w63q',
+            value: {
+              type: 'object',
+              properties: {
+                email: { type: 'string', format: 'email' }
+              },
+              required: ['email'],
+              additionalProperties: false
+            },
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
+          }
+        ],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'response1');
+    });
+
+    it('should return error response if operator is "valid_json_schema" and schema is invalid without path and using a specific format (email)', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = { 'Content-Type': 'application/json' };
+
+          return headers[headerName];
+        },
+        body: {
+          // invalid email
+          email: 'testexample.org'
+        }
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'body',
+                modifier: '',
+                value: 'schema',
+                operator: 'valid_json_schema',
+                invert: false
+              }
+            ],
+            body: 'response1'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [
+          {
+            name: 'schema',
+            id: 'w63q',
+            value: {
+              type: 'object',
+              properties: {
+                email: { type: 'string', format: 'email' }
+              },
+              required: ['email'],
+              additionalProperties: false
+            },
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
+          }
+        ],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'unauthorized');
+    });
+
     it('should return response if operator is "valid_json_schema" and schema is valid', () => {
       const request: Request = {
         header: function (headerName: string) {
@@ -3593,7 +4069,9 @@ describe('Response rules interpreter', () => {
               required: ['foo'],
               additionalProperties: false
             },
-            parsed: true
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
@@ -3651,7 +4129,9 @@ describe('Response rules interpreter', () => {
               required: ['foo'],
               additionalProperties: false
             },
-            parsed: true
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
@@ -3659,6 +4139,7 @@ describe('Response rules interpreter', () => {
       ).chooseResponse(1);
       strictEqual(routeResponse?.body, 'response1');
     });
+
     it('should return error response if operator is "valid_json_schema" and schema validation fails', () => {
       const request: Request = {
         header: function (headerName: string) {
@@ -3708,7 +4189,9 @@ describe('Response rules interpreter', () => {
               required: ['foo'],
               additionalProperties: false
             },
-            parsed: true
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
@@ -3716,6 +4199,7 @@ describe('Response rules interpreter', () => {
       ).chooseResponse(1);
       strictEqual(routeResponse?.body, 'unauthorized');
     });
+
     it('should return error response if operator is "valid_json_schema" and schema is invalid', () => {
       const request: Request = {
         header: function (headerName: string) {
@@ -3765,7 +4249,9 @@ describe('Response rules interpreter', () => {
               required: ['foo'],
               additionalProperties: false
             },
-            parsed: true
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
@@ -3773,6 +4259,7 @@ describe('Response rules interpreter', () => {
       ).chooseResponse(1);
       strictEqual(routeResponse?.body, 'unauthorized');
     });
+
     it('should return error response if operator is "valid_json_schema" and schema property is invalid', () => {
       const request: Request = {
         header: function (headerName: string) {
@@ -3822,13 +4309,91 @@ describe('Response rules interpreter', () => {
               required: ['foo'],
               additionalProperties: false
             },
-            parsed: true
+            parsed: true,
+            uuid: 'abcd',
+            validJson: true
           }
         ],
         {},
         ''
       ).chooseResponse(1);
       strictEqual(routeResponse?.body, 'unauthorized');
+    });
+
+    it('should return response if operator is "empty_array" and body property is an empty array', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = { 'Content-Type': 'application/json' };
+
+          return headers[headerName];
+        },
+        body: {
+          prop: []
+        }
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'body',
+                modifier: 'prop',
+                value: '',
+                operator: 'empty_array',
+                invert: false
+              }
+            ],
+            body: 'response1'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'response1');
+    });
+
+    it('should return response if operator is "empty_array" and body is an empty array', () => {
+      const request: Request = {
+        header: function (headerName: string) {
+          const headers = { 'Content-Type': 'application/json' };
+
+          return headers[headerName];
+        },
+        body: []
+      } as Request;
+
+      const routeResponse = new ResponseRulesInterpreter(
+        [
+          routeResponse403,
+          {
+            ...routeResponseTemplate,
+            rules: [
+              {
+                target: 'body',
+                modifier: '',
+                value: '',
+                operator: 'empty_array',
+                invert: false
+              }
+            ],
+            body: 'response1'
+          }
+        ],
+        fromExpressRequest(request),
+        null,
+        EnvironmentDefault,
+        [],
+        {},
+        ''
+      ).chooseResponse(1);
+      strictEqual(routeResponse?.body, 'response1');
     });
   });
 
@@ -4078,7 +4643,7 @@ describe('Response rules interpreter', () => {
 
     it('should return second response if first one has no rule with AND', () => {
       /**
-       * This test is here to prevent a bug that occured when first response had no rule but a AND operator.
+       * This test is here to prevent a bug that occurred when first response had no rule but a AND operator.
        * It intercepted everything and prevented to get the correct response.
        * See https://github.com/mockoon/commons-server/issues/6
        */
@@ -4320,7 +4885,16 @@ describe('Response rules interpreter', () => {
       fromExpressRequest(request),
       null,
       EnvironmentDefault,
-      [{ id: 'abcd', name: 'bodypropname', value: 'testprop', parsed: true }],
+      [
+        {
+          id: 'abcd',
+          name: 'bodypropname',
+          value: 'testprop',
+          parsed: true,
+          uuid: 'abcd',
+          validJson: true
+        }
+      ],
       {},
       ''
     ).chooseResponse(1);

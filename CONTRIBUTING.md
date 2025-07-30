@@ -1,29 +1,46 @@
 # Contributing to Mockoon
 
-There are many ways to contribute to Mockoon: opening bugs or issues, submitting pull requests, suggesting new features, etc. All contributions are welcome but, please note that Mockoon promise is to be simple, easy to use, and fast. So, not all features are worth implementing and the maintainers may choose not to implement features that are out of Mockoon's scope, too complicated (especially UX wise) or, that didn't gather enough attention from the community. But we are open to discussion :)
+Mockoon thrives on community contributions, and there are many ways to get involved! You can report bugs, open issues, submit pull requests, or suggest new features. All contributions are appreciated. However, it's important to note that Mockoon's core promise is to remain easy to use, and after years of development, it is mostly feature-complete.
 
-You can always discuss your ideas or ask for support on the [official community](https://github.com/mockoon/mockoon/discussions).
+While we’re always open to enhancing the application, we strive to balance adding new features with maintaining simplicity and ensuring long-term maintainability. For this reason, not every feature suggestion will be implemented—especially if it falls outside Mockoon’s scope, introduces unnecessary complexity (particularly in terms of user experience), or lacks strong community interest.
 
-## Contribution rules
+That said, we value your input and welcome open discussions! 🙂
 
-The following rules apply to all contributions:
+How do we decide what to work on next? We don't have a strict roadmap, but we do have a few guidelines:
 
-- Always search among the opened and closed issues. Assigned issues are already being worked on, and, most of the time, cannot be reassigned.
-- Bug reports, enhancements, and features **must** be discussed with the maintainers regarding the implementation, changes to the UI, etc.
-- Pull requests **must** refer to an open issue. Pull requests not solving existing issues may not be accepted.
-- Issues and PR **must** follow the provided templates.
+- We prioritize bug fixes and performance improvements.
+- We consider features that are highly requested by the community.
+- We have our own ideas for improving the application, often aligned with our commercial offering ([Mockoon Cloud](https://mockoon.com/cloud/)) and our own usage of the applications.
+- We consider less requested features that are easy to implement and maintain, or that have a low impact on the application's complexity (e.g., adding a new templating helper).
 
-## Find an issue to work on
+What **we recommend before contributing**:
+
+- Take some time to understand the application's existing features and limitations by reading the [documentation](https://mockoon.com/docs/latest/).
+- Search through [Mockoon's GitHub issues](https://github.com/mockoon/mockoon/issues) to see if your bug report or feature request has already been addressed, implemented, or declined.
+- If you’re uncertain whether a feature fits Mockoon’s scope or if an issue is indeed a bug, [start a discussion first](https://github.com/mockoon/mockoon/discussions). This helps clarify ideas before creating an issue or working on a pull request.
+- If you’re planning to contribute a new feature, please open an issue to discuss it with the maintainers. This ensures alignment with the project’s goals and gives the community a chance to provide feedback.
+
+You can discuss all things related to Mockoon and ask for help on the [official community](https://github.com/mockoon/mockoon/discussions).
+
+What **we don't recommend**:
+
+- Opening a pull request without discussing the feature or bug fix with the maintainers first or if it hasn't been discussed or approved first. This can lead to wasted effort if the change isn't aligned with the project's goals.
+- Opening a new issue without providing a way to reproduce the bug or a clear description of the feature request. This can lead to misunderstandings and delays in addressing the issue.
+
+What to **keep in mind when contributing to an open-source project**:
+
+- Your timing may not align with the maintainers' availability. You may open an issue or pull request and not receive an immediate response. Please be patient and respectful.
+- Your feature request or bug report may not be accepted. The maintainers have to balance many factors when deciding what to include in the application. If your request is declined, it doesn't mean your contribution isn't valued.
+
+## Contributing and issues assignment
+
+We usually prefer to assign issues to contributors who are actively working on them. This helps avoid duplicated work and ensures that the assignee is the person who will be working on the issue (yes it's old-fashioned!).
+
+We recommend the following workflow:
 
 - Check for **opened unassigned** issues or open a new one (after searching for closed issues).
 - If you are not the issue creator, comment on the issue and request to work on it so it can be assigned to you.
 - After discussing the implementation, the issue will be assigned to you by a maintainer. As a rule, the assignee is the person working on the issue.
-
-Please respect this workflow to ensure that:
-
-- Your work is in line with Mockoon roadmap.
-- It hasn't been already done/rejected.
-- There is only one person at a time working on an issue.
 
 ## Monorepo
 
@@ -38,7 +55,7 @@ Mockoon is using a monorepo setup (with Lerna). We have 4 packages in the `./pac
 
 - _@mockoon/cli_; the CLI built with Oclif
 - _@mockoon/serverless_; the package to run Mockoon as a serverless function (AWS lambda, etc.)
-- _@mockoon/desktop_: the desktop application built with Electron and Angular (for the renderer process)
+- _@mockoon/app_: the desktop application built with Electron and Angular (for the renderer process), and the web app (only the Angular part).
 
 ## Build and run the applications locally during development
 
@@ -81,7 +98,7 @@ When a feature or bugfix requires a change in the data model (`Environment`, `Ro
 
 - Add a new migration function in the @mockoon/commons library `./packages/commons/src/libs/migrations.ts` file.
 - Add a new test for the migration in the same library `./packages/commons/test/data/migrations/{MIGRATION_ID}/environments.json` and `./packages/commons//test/suites/migrations.spec.ts` files.
-- Use the script `./packages/desktop/scripts/migrate-tests.js` in the desktop package in order to migrate the tests' JSON samples (usually located in `./packages/{package_name}/test/data/...`) to the latest migration. Please note that some folders/sample files are excluded from the migration on purpose.
+- Use the script `./packages/app/scripts/migrate-tests.js` in the app package in order to migrate the tests' JSON samples (usually located in `./packages/{package_name}/test/data/...`) to the latest migration. Please note that some folders/sample files are excluded from the migration on purpose.
 
 Some data model changes may not require a migration, for example, adding a new choice in an enum (translated in the UI by a dropdown).
 
@@ -110,17 +127,17 @@ After the packages are build, you can run the tests necessary to your changes:
 
 To run the desktop application tests, first you need to package the application for your platform. Run one of the following commands:
 
-- `package:desktop:test:win`
-- `package:desktop:test:mac`
-- `package:desktop:test:linux`
+- `npm run package:desktop:test:win`
+- `npm run package:desktop:test:mac`
+- `npm run package:desktop:test:linux`
 
-This will create a packaged version of the desktop application (without installer) in the `./packages/desktop/packages/{win-unpacked|mac|linux-unpacked}` folder.
+This will create a packaged version of the desktop application (without installer) in the `./packages/app/packages/{win-unpacked|mac|linux-unpacked}` folder.
 
 You can then run the tests with one of the following commands:
 
-- `test:desktop:win`
-- `test:desktop:mac`
-- `test:desktop:linux`
+- `npm run test:desktop:win`
+- `npm run test:desktop:mac`
+- `npm run test:desktop:linux`
 
 You can also run a single test file with the following commands (from the monorepo root level):
 
@@ -141,7 +158,7 @@ Open a pull request to be merged in the `main` branch. All branches should start
 - Increment the version (which follows [semver](https://semver.org/)) in each package.json file depending on the changes, using `npm run set-versions`. To ignore a package give it the same version. Lerna will take care of increasing the internal dependencies version numbers.
 - Push.
 
-> Versions are synchronized between the desktop application, CLI and the libraries. We release all of them at the same time with a **major** version bump when a data migration is included in the relase, or when new common features are added (common = feature working in both desktop and CLI). The libraries can be released independently from the desktop application for minor and patch versions when the changes are only affecting the libraries.
+> Versions are synchronized between the desktop application, CLI and the libraries. We release all of them at the same time with a **major** version bump when a data migration is included in the release, or when new common features are added (common = feature working in both desktop and CLI). The libraries can be released independently from the desktop application for minor and patch versions when the changes are only affecting the libraries.
 
 **Desktop application's process:**
 
@@ -177,7 +194,7 @@ To build the desktop application locally in production mode, you can use the fol
 - Or `npm run package:desktop:mac:unsigned` to package the application for macOS.
 - Or `npm run package:desktop:linux` to package the application for Linux.
 
-This will create a packaged version of the desktop application in the `./packages/desktop/packages/` folder.
+This will create a packaged version of the desktop application in the `./packages/app/packages/` folder.
 
 > 💡 Note: Code signing should be ignored on Windows when building locally. For macOS, the command `npm run package:desktop:mac:unsigned` will create an unsigned package, ignoring code signing and notarization.
 

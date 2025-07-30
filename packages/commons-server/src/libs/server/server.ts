@@ -35,11 +35,7 @@ import { EventEmitter } from 'events';
 import express, { Application, NextFunction, Request, Response } from 'express';
 import { createReadStream, readFile, readFileSync, statSync } from 'fs';
 import type { RequestListener } from 'http';
-import {
-  IncomingMessage,
-  createServer as httpCreateServer,
-  Server as httpServer
-} from 'http';
+import { createServer as httpCreateServer, Server as httpServer } from 'http';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import {
   createServer as httpsCreateServer,
@@ -47,7 +43,7 @@ import {
 } from 'https';
 import killable from 'killable';
 import { lookup as mimeTypeLookup } from 'mime-types';
-import { basename, extname } from 'path';
+import { basename, extname, isAbsolute, resolve } from 'path';
 import { match } from 'path-to-regexp';
 import { parse as qsParse } from 'qs';
 import rangeParser from 'range-parser';
@@ -89,11 +85,25 @@ import {
 /**
  * Create a server instance from an Environment object.
  *
- * Extends EventEmitter.
+ * Extends an EventEmitter.
+ *
+ * ⚠️ The function listenServerEvents must be used to listen to server events
+ * and avoid the EventEmitter to throw errors due to the lack of listeners.
+ *
+ * Example:
+ *
+ * ```
+ * const server = new MockoonServer(environment);
+ * const logger = createLoggerInstance();
+ * listenServerEvents(server, environment, logger, false);
+ *
+ * // or ate least listen to the error event
+ * server.on('error', (errorCode, originalError) => {});
+ * ```
  */
 export class MockoonServer extends (EventEmitter as new () => TypedEmitter<ServerEvents>) {
   private serverInstance: httpServer | httpsServer;
-  private webSocketServers: WebSocketServer[] = [];
+  private webSocketServers: { instance: WebSocketServer; path: string }[] = [];
   private tlsOptions: SecureContextOptions = {};
   private processedDatabuckets: ProcessedDatabucket[] = [];
   // store the request number for each route
@@ -101,6 +111,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
   // templating global variables
   private globalVariables: Record<string, any> = {};
   private options: ServerOptions = {
+    environmentDirectory: '.',
     disabledRoutes: [],
     envVarsPrefix: defaultEnvironmentVariablesPrefix,
     enableAdminApi: true,
@@ -131,21 +142,13 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
   public start(): void {
     const requestListener = this.createRequestListener();
 
-    const routes = this.getRoutesOfEnvironment();
-    const webSocketRoutes = routes.filter((route) => {
-      const routePath = preparePath(
-        this.environment.endpointPrefix,
-        route.endpoint
-      );
-
-      return (
-        route.type === RouteType.WS &&
-        !this.options.disabledRoutes?.some(
-          (disabledRoute) =>
-            route.uuid === disabledRoute || routePath.includes(disabledRoute)
-        )
-      );
-    });
+    const webSocketRoutes = routesFromFolder(
+      this.environment.rootChildren,
+      this.environment.folders,
+      this.environment.routes,
+      this.options.disabledRoutes,
+      [RouteType.WS]
+    );
 
     // create https or http server instance
     if (this.environment.tlsOptions.enabled && !this.options.disableTls) {
@@ -218,9 +221,13 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
    */
   public stop(): void {
     if (this.webSocketServers.length > 0) {
-      this.webSocketServers.forEach((wss) => wss.close());
+      this.webSocketServers.forEach((webSocketServer) => {
+        webSocketServer.instance.close();
+      });
     }
+
     BroadcastContext.getInstance().closeAll();
+
     if (this.serverInstance) {
       this.serverInstance.kill(() => {
         this.emit('stopped');
@@ -244,14 +251,12 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
     app.disable('x-powered-by');
     app.disable('etag');
 
-    this.generateDatabuckets(this.environment);
-
     // This middleware is required to parse the body for createAdminEndpoint requests
     app.use(this.parseBody);
 
     if (this.options.enableAdminApi) {
       // admin endpoint must be created before all other routes to avoid conflicts
-      createAdminEndpoint(app, {
+      createAdminEndpoint(app, this, {
         statePurgeCallback: () => {
           // reset request numbers
           Object.keys(this.requestNumbers).forEach((routeUUID) => {
@@ -265,12 +270,8 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
         purgeGlobalVariables: () => {
           this.globalVariables = {};
         },
-        getDataBuckets: (nameOrId: string) =>
-          this.processedDatabuckets.find(
-            (processedDatabucket) =>
-              processedDatabucket.name === nameOrId ||
-              processedDatabucket.id === nameOrId
-          ),
+        getDataBucket: this.getProcessedDatabucket.bind(this),
+        getDataBuckets: () => this.processedDatabuckets,
         purgeDataBuckets: () => {
           this.processedDatabuckets = [];
           this.generateDatabuckets(this.environment);
@@ -279,9 +280,15 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
         purgeLogs: () => {
           this.transactionLogs = [];
         },
-        envVarsPrefix: this.options.envVarsPrefix
+        envVarsPrefix: this.options.envVarsPrefix,
+        updateEnvironment: (environment: Environment) => {
+          this.environment = environment;
+        }
       });
     }
+
+    // process databuckets after admin endpoint creation to properly catch the databucket processed event
+    this.generateDatabuckets(this.environment);
 
     app.use(this.emitEvent);
     app.use(this.delayResponse);
@@ -296,6 +303,28 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
     app.use(this.errorHandler);
 
     return app;
+  }
+  /**
+   * Return a processed databucket by name, id, or uuid
+   *
+   * @param identifier
+   */
+  public getProcessedDatabucket(identifier: string) {
+    return this.processedDatabuckets.find(
+      (processedDatabucket) =>
+        processedDatabucket.name.toLowerCase() === identifier.toLowerCase() ||
+        processedDatabucket.id === identifier.toLowerCase() ||
+        processedDatabucket.uuid === identifier.toLowerCase()
+    );
+  }
+
+  /**
+   * Method that can be used to update the server's environment
+   *
+   * @param environment
+   */
+  public updateEnvironment(environment: Environment): void {
+    this.environment = environment;
   }
 
   /**
@@ -328,8 +357,6 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
     response: Response,
     next: NextFunction
   ) => {
-    this.refreshEnvironment();
-
     setTimeout(
       next,
       getLatency(this.environment.latency, this.options.enableRandomLatency)
@@ -396,6 +423,15 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
             }
 
             if (name != null && !info.nameTruncated && !info.valueTruncated) {
+              // add support for first level array fields (e.g. multiple fields with the same name without brackets)
+              if (
+                !name.includes('[') &&
+                request.body[name] !== undefined &&
+                !Array.isArray(request.body[name])
+              ) {
+                request.body[name] = [request.body[name]];
+                name = `${name}[]`;
+              }
               appendField(request.body, name, value);
             }
           });
@@ -422,6 +458,16 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
               });
 
               stream.on('close', () => {
+                // add support for first level array fields (e.g. multiple fields with the same name without brackets)
+                if (
+                  !name.includes('[') &&
+                  request.body[name] !== undefined &&
+                  !Array.isArray(request.body[name])
+                ) {
+                  request.body[name] = [request.body[name]];
+                  name = `${name}[]`;
+                }
+
                 appendField(request.body, name, file);
               });
             }
@@ -544,24 +590,6 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
   };
 
   /**
-   * Returns all defined routes in the setup environment.
-   */
-  private getRoutesOfEnvironment(): Route[] {
-    if (
-      !this.environment.rootChildren ||
-      this.environment.rootChildren.length < 1
-    ) {
-      return [];
-    }
-
-    return routesFromFolder(
-      this.environment.rootChildren,
-      this.environment.folders,
-      this.environment.routes
-    );
-  }
-
-  /**
    * Generate an environment routes and attach to running server
    *
    * @param server - server on which attach routes
@@ -578,7 +606,8 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
       this.environment.rootChildren,
       this.environment.folders,
       this.environment.routes,
-      this.options.disabledRoutes
+      this.options.disabledRoutes,
+      [RouteType.HTTP, RouteType.CRUD]
     );
 
     routes.forEach((declaredRoute: Route) => {
@@ -592,7 +621,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
 
         if (declaredRoute.type === RouteType.CRUD) {
           this.createCRUDRoute(server, declaredRoute, routePath);
-        } else {
+        } else if (declaredRoute.type === RouteType.HTTP) {
           this.createRESTRoute(server, declaredRoute, routePath);
         }
       } catch (error: any) {
@@ -617,42 +646,59 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
    * @param wsRoutes
    */
   private createWSRoutes(wsRoutes: Route[]) {
-    const envPath = this.environment.endpointPrefix
-      ? `/${this.environment.endpointPrefix}`
-      : '';
-
     wsRoutes.forEach((wsRoute) => {
       const webSocketServer = new WebSocket.Server({
-        noServer: true,
-        path: `${envPath}`
+        noServer: true
       });
 
-      this.webSocketServers.push(webSocketServer);
+      this.webSocketServers.push({
+        instance: webSocketServer,
+        path: preparePath(this.environment.endpointPrefix, wsRoute.endpoint)
+      });
 
       webSocketServer.on(
         'connection',
         this.createWebSocketConnectionHandler(webSocketServer, wsRoute)
       );
+    });
 
-      const pathMatcherFn = match(
-        wsRoute.endpoint.startsWith('/')
-          ? wsRoute.endpoint
-          : '/' + wsRoute.endpoint
-      );
+    this.serverInstance.on('upgrade', (req, socket, head) => {
+      const urlParsed = parseUrl(req.url || '', true);
 
-      this.serverInstance.on('upgrade', (req, socket, head) => {
-        const urlParsed = parseUrl(req.url || '', true);
-        if (pathMatcherFn(urlParsed.pathname || '')) {
-          webSocketServer.handleUpgrade(req, socket, head, (client) => {
-            webSocketServer.emit('connection', client, req);
+      // check if the request is a websocket upgrade request
+      if (req.headers.upgrade !== 'websocket') {
+        socket.write(`HTTP/${req.httpVersion} 400 Bad Request\r\n`);
+        socket.write('Content-Type: text/html\r\n');
+        socket.write('Content-length: 72\r\n\r\n');
+        socket.write(
+          'Invalid WebSocket upgrade request: "Upgrade: websocket" header not found'
+        );
+        socket.destroy();
+
+        return;
+      }
+
+      for (const wsServer of this.webSocketServers) {
+        if (match(wsServer.path)(urlParsed.pathname || '')) {
+          wsServer.instance.handleUpgrade(req, socket, head, (client) => {
+            wsServer.instance.emit('connection', client, req);
           });
+
+          return;
         }
-      });
+      }
+
+      // if no route is matched (loop didn't return), close the connection
+      socket.write(`HTTP/${req.httpVersion} 404 Not Found\r\n`);
+      socket.write('Content-Type: text/html\r\n');
+      socket.write('Content-length: 38\r\n\r\n');
+      socket.write('No WebSocket route found for this path');
+      socket.destroy();
     });
   }
 
   /**
-   * Creates a handler for a web socket connection recieved, if only any
+   * Creates a handler for a web socket connection received, if only any
    * of route is matched.
    *
    * @param webSocketServer
@@ -663,9 +709,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
     webSocketServer: WebSocketServer,
     routeFor: Route
   ) {
-    return (socket: WebSocket, request: IncomingMessage) => {
-      // Refresh the environment when a new client is connected.
-      this.refreshEnvironment();
+    return (socket: WebSocket, request: Request) => {
       const route = this.getRefreshedRoute(routeFor);
 
       if (!route) {
@@ -716,7 +760,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
 
       const serverRequest = fromWsRequest(request, route);
 
-      // This is not waiting until a messge from client. But will push messages as a stream.
+      // This is not waiting until a message from client. But will push messages as a stream.
       if (route.streamingMode === StreamingMode.BROADCAST) {
         this.handleBroadcastResponse(
           webSocketServer,
@@ -750,8 +794,6 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
           return;
         }
 
-        // Refresh the environment when a new message is recieved.
-        this.refreshEnvironment();
         const routeInMessage = this.getRefreshedRoute(route);
 
         // the route is not found. Skip reacting.
@@ -829,15 +871,14 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
     socket: WebSocket,
     route: Route,
     enabledRouteResponse: RouteResponse,
-    request?: IncomingMessage,
+    request?: Request,
     data?: string,
     connectedRequest?: ServerRequest
   ): string | undefined {
     let content: any = enabledRouteResponse.body;
     let finalRequest = connectedRequest;
-    if (!finalRequest) {
-      finalRequest = request ? fromWsRequest(request, route, data) : undefined;
-    }
+
+    finalRequest ??= request ? fromWsRequest(request, route, data) : undefined;
 
     if (
       enabledRouteResponse.bodyType === BodyTypes.DATABUCKET &&
@@ -864,24 +905,9 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
       enabledRouteResponse.bodyType === BodyTypes.FILE &&
       enabledRouteResponse.filePath
     ) {
-      const templateParser = (contentData: string) =>
-        TemplateParser({
-          shouldOmitDataHelper: false,
-          content: contentData,
-          environment: this.environment,
-          processedDatabuckets: this.processedDatabuckets,
-          globalVariables: this.globalVariables,
-          request: finalRequest,
-          envVarsPrefix: this.options.envVarsPrefix
-        });
-
-      // resolve file location
-      let filePath = templateParser(
-        enabledRouteResponse.filePath.replace(/\\/g, '/')
-      );
-      filePath = resolvePathFromEnvironment(
-        filePath,
-        this.options.environmentDirectory
+      const filePath = this.getSafeFilePath(
+        enabledRouteResponse.filePath,
+        finalRequest
       );
 
       serveFileContentInWs(
@@ -890,7 +916,16 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
         enabledRouteResponse,
         this,
         filePath,
-        templateParser
+        (contentData: string) =>
+          TemplateParser({
+            shouldOmitDataHelper: false,
+            content: contentData,
+            environment: this.environment,
+            processedDatabuckets: this.processedDatabuckets,
+            globalVariables: this.globalVariables,
+            request: finalRequest,
+            envVarsPrefix: this.options.envVarsPrefix
+          })
       );
 
       return;
@@ -975,7 +1010,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
   private handleOneToOneStreamingResponses(
     socket: WebSocket,
     route: Route,
-    request: IncomingMessage,
+    request: Request,
     baseErrorMeta: any
   ) {
     let responseNumber = 1;
@@ -1096,7 +1131,6 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
       this.generateRequestDatabuckets(route, this.environment, request);
 
       // refresh environment data to get route changes that do not require a restart (headers, body, etc)
-      this.refreshEnvironment();
       const currentRoute = this.getRefreshedRoute(route);
 
       if (!currentRoute) {
@@ -1309,7 +1343,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
 
           setTimeout(() => {
             fetch(url, {
-              // uppercase even if most methods will work in lower case, but PACTH has to be uppercase or could be rejected by some servers (Node.js)
+              // uppercase even if most methods will work in lower case, but PATCH has to be uppercase or could be rejected by some servers (Node.js)
               method: cb.method.toUpperCase(),
               headers: sendingHeaders.headers,
               body: isBodySupportingMethod(cb.method) ? content : undefined
@@ -1418,20 +1452,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
         envVarsPrefix: this.options.envVarsPrefix
       });
 
-      let filePath = TemplateParser({
-        shouldOmitDataHelper: false,
-        content: callback.filePath.replace(/\\/g, '/'),
-        environment: this.environment,
-        processedDatabuckets: this.processedDatabuckets,
-        globalVariables: this.globalVariables,
-        request: serverRequest,
-        envVarsPrefix: this.options.envVarsPrefix
-      });
-
-      filePath = resolvePathFromEnvironment(
-        filePath,
-        this.options.environmentDirectory
-      );
+      const filePath = this.getSafeFilePath(callback.filePath, serverRequest);
 
       const fileMimeType = mimeTypeLookup(filePath) || '';
 
@@ -1452,7 +1473,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
 
           setTimeout(() => {
             fetch(url, {
-              // uppercase even if most methods will work in lower case, but PACTH has to be uppercase or could be rejected by some servers (Node.js)
+              // uppercase even if most methods will work in lower case, but PATCH has to be uppercase or could be rejected by some servers (Node.js)
               method: callback.method.toUpperCase(),
               body: form,
               headers: sendingHeaders.headers
@@ -1500,7 +1521,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
 
           setTimeout(() => {
             fetch(url, {
-              // uppercase even if most methods will work in lower case, but PACTH has to be uppercase or could be rejected by some servers (Node.js)
+              // uppercase even if most methods will work in lower case, but PATCH has to be uppercase or could be rejected by some servers (Node.js)
               method: callback.method.toUpperCase(),
               headers: sendingHeaders.headers,
               body: fileContent
@@ -1568,19 +1589,9 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
 
     const serverRequest = fromExpressRequest(request);
     try {
-      let filePath = TemplateParser({
-        shouldOmitDataHelper: false,
-        content: routeResponse.filePath.replace(/\\/g, '/'),
-        environment: this.environment,
-        processedDatabuckets: this.processedDatabuckets,
-        globalVariables: this.globalVariables,
-        request: serverRequest,
-        envVarsPrefix: this.options.envVarsPrefix
-      });
-
-      filePath = resolvePathFromEnvironment(
-        filePath,
-        this.options.environmentDirectory
+      const filePath = this.getSafeFilePath(
+        routeResponse.filePath,
+        serverRequest
       );
 
       const fileMimeType = mimeTypeLookup(filePath) || '';
@@ -1593,7 +1604,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
       if (!routeResponse.sendFileAsBody) {
         response.set(
           'Content-Disposition',
-          `attachment; filename="${basename(filePath)}"`
+          `attachment; filename="${encodeURIComponent(basename(filePath))}"`
         );
       }
 
@@ -1728,8 +1739,6 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
   private setCors(server: Application) {
     if (this.environment.cors) {
       server.options('/*', (req, res) => {
-        this.refreshEnvironment();
-
         // override default CORS headers with environment's headers
         this.setHeaders(
           [...CORSHeaders, ...this.environment.headers],
@@ -1778,8 +1787,6 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
           ssl: { ...this.tlsOptions, agent: false },
           on: {
             proxyReq: (proxyReq, request) => {
-              this.refreshEnvironment();
-
               request.proxied = true;
 
               this.setHeaders(
@@ -1794,8 +1801,6 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
               }
             },
             proxyRes: (proxyRes, request, response) => {
-              this.refreshEnvironment();
-
               const buffers: Buffer[] = [];
               proxyRes.on('data', (chunk) => {
                 buffers.push(chunk);
@@ -2009,36 +2014,14 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
   }
 
   /**
-   * Request an updated environment to allow
-   * modification of some parameters without a restart (latency, headers, etc)
-   */
-  private refreshEnvironment() {
-    if (this.options.refreshEnvironmentFunction && this.environment.uuid) {
-      const updatedEnvironment = this.options.refreshEnvironmentFunction(
-        this.environment.uuid
-      );
-
-      if (updatedEnvironment) {
-        this.environment = updatedEnvironment;
-      }
-    }
-  }
-
-  /**
-   * Request an updated route to allow
-   * modification of some parameters without a restart (latency, headers, etc)
-   * This only makes sense if the refreshEnvironmentFunction has been provided.
+   * Fetch the updated route as some parameters can be applied without a restart (latency, headers, etc)
    *
    * @param routeUUID
    */
   private getRefreshedRoute(currentRoute: Route): Route | undefined {
-    if (this.options.refreshEnvironmentFunction && this.environment.uuid) {
-      return this.environment.routes.find(
-        (route) => route.uuid === currentRoute.uuid
-      );
-    }
-
-    return currentRoute;
+    return this.environment.routes.find(
+      (route) => route.uuid === currentRoute.uuid
+    );
   }
 
   /**
@@ -2124,16 +2107,18 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
         let newProcessedDatabucket: ProcessedDatabucket;
 
         if (
-          new RegExp(`{{2,3}[#(\\s\\w]*(${requestHelperNames.join('|')})`).exec(
-            databucket.value
-          )
+          new RegExp(
+            `{{2,3}[#(~\\s\\w ]*((?<![\\w])${requestHelperNames.join('|')})[)} ~]+`
+          ).exec(databucket.value)
         ) {
           // a request helper was found
           newProcessedDatabucket = {
+            uuid: databucket.uuid,
             id: databucket.id,
             name: databucket.name,
             value: databucket.value,
-            parsed: false
+            parsed: false,
+            validJson: false
           };
         } else {
           let templateParsedContent;
@@ -2149,32 +2134,41 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
             });
 
             const JSONParsedContent = JSON.parse(templateParsedContent);
+
             newProcessedDatabucket = {
+              uuid: databucket.uuid,
               id: databucket.id,
               name: databucket.name,
               value: JSONParsedContent,
-              parsed: true
+              parsed: true,
+              validJson: true
             };
           } catch (error: any) {
             if (error instanceof SyntaxError) {
               newProcessedDatabucket = {
+                uuid: databucket.uuid,
                 id: databucket.id,
                 name: databucket.name,
                 value: templateParsedContent,
-                parsed: true
+                parsed: true,
+                validJson: false
               };
             } else {
               newProcessedDatabucket = {
+                uuid: databucket.uuid,
                 id: databucket.id,
                 name: databucket.name,
                 value: error.message,
-                parsed: true
+                parsed: true,
+                validJson: false
               };
             }
           }
         }
         this.processedDatabuckets.push(newProcessedDatabucket);
       });
+
+      this.emitProcessedDatabuckets();
     }
   }
 
@@ -2350,6 +2344,7 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
 
         if (targetDatabucket && !targetDatabucket?.parsed) {
           let content = targetDatabucket.value;
+
           try {
             content = TemplateParser({
               shouldOmitDataHelper: false,
@@ -2360,20 +2355,42 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
               request: fromExpressRequest(request),
               envVarsPrefix: this.options.envVarsPrefix
             });
+
             const JSONParsedcontent = JSON.parse(content);
+
             targetDatabucket.value = JSONParsedcontent;
             targetDatabucket.parsed = true;
+            targetDatabucket.validJson = true;
           } catch (error: any) {
             if (error instanceof SyntaxError) {
               targetDatabucket.value = content;
             } else {
               targetDatabucket.value = error.message;
             }
+
             targetDatabucket.parsed = true;
+            targetDatabucket.validJson = false;
           }
         }
       }
+
+      this.emitProcessedDatabuckets();
     }
+  }
+
+  /**
+   * Emit an event with the processed databuckets.
+   * Remove the value from the processed databuckets to avoid sending
+   * too much data to the client.
+   */
+  private emitProcessedDatabuckets() {
+    this.emit(
+      'data-bucket-processed',
+      // remove the value from the processed databuckets to avoid sending it to the client
+      this.processedDatabuckets.map(({ value: _value, ...props }) => ({
+        ...props
+      }))
+    );
   }
 
   /**
@@ -2386,5 +2403,72 @@ export class MockoonServer extends (EventEmitter as new () => TypedEmitter<Serve
     if (response.locals.statusCode !== undefined) {
       response.status(response.locals.statusCode);
     }
+  }
+
+  /**
+   * Parse file paths and prevent path traversal
+   *
+   * If the path is absolute, it must stay within its original static base
+   * (before the first {{...}})
+   * If the path is relative, it must stay within the environment base directory
+   *
+   * @param filePath
+   * @param request
+   * @returns
+   */
+  private getSafeFilePath(filePath: string, request?: ServerRequest) {
+    const resolvePath = (path: string) => {
+      const isPathAbsolute = isAbsolute(path);
+
+      return isPathAbsolute
+        ? resolve(path)
+        : resolve(this.options.environmentDirectory, path);
+    };
+    // Convert backslashes to forward slashes (Windows compatibility)
+    const rawFilePath = filePath.replace(/\\(?!\.)/g, '/');
+
+    // Check if there is any templating helper in the file path
+    const hasTemplatingHelper = /{{2,3}[^}]+}{2,3}/.test(rawFilePath);
+
+    if (!hasTemplatingHelper) {
+      // If no templating helper, allow unrestricted access
+      return resolvePath(rawFilePath);
+    }
+
+    // Extract static base from templated string (before first {{...}})
+    const staticBaseMatch = rawFilePath.match(/^([^{}]+)/);
+    const staticBaseDir = staticBaseMatch ? resolve(staticBaseMatch[1]) : null;
+
+    const parsedFilePath = TemplateParser({
+      shouldOmitDataHelper: false,
+      content: rawFilePath,
+      environment: this.environment,
+      processedDatabuckets: this.processedDatabuckets,
+      globalVariables: this.globalVariables,
+      request,
+      envVarsPrefix: this.options.envVarsPrefix
+    });
+
+    // Determine if the path is absolute or relative
+    const isPathAbsolute = isAbsolute(parsedFilePath);
+    const resolvedPath = resolvePath(parsedFilePath);
+
+    if (isPathAbsolute) {
+      // Absolute paths must stay within their original static base
+      if (!staticBaseDir || !resolvedPath.startsWith(staticBaseDir)) {
+        throw new Error(
+          `Access to absolute path outside of the original static base directory (${resolvedPath})`
+        );
+      }
+    } else {
+      // Relative paths must stay within the environment base directory
+      if (!resolvedPath.startsWith(this.options.environmentDirectory)) {
+        throw new Error(
+          `Access to relative path outside of the environment base directory (${resolvedPath})`
+        );
+      }
+    }
+
+    return resolvedPath;
   }
 }

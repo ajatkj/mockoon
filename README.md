@@ -5,8 +5,6 @@
   <br>
   <a href="https://mockoon.com/"><img src="https://img.shields.io/badge/Website-Go-green.svg?style=flat-square&colorB=1997c6"/></a>
   <a href="https://mockoon.com/newsletter/"><img src="https://img.shields.io/badge/Newsletter-Subscribe-green.svg?style=flat-square"/></a>
-  <a href="https://twitter.com/GetMockoon"><img src="https://img.shields.io/badge/Twitter_@GetMockoon-follow-blue.svg?style=flat-square&colorB=1da1f2"/></a>
-  <a href="https://mockoon.com/discord/"><img src="https://img.shields.io/badge/Discord-go-blue.svg?style=flat-square&colorA=6c84d9&colorB=1da1f2"/></a>  
   <br>
   <br>
   <h1>Mockoon: awesome API mocking</h1>
@@ -14,9 +12,9 @@
 
 Mockoon is the easiest and quickest way to design and run mock APIs. No remote deployment, no account required, free and open-source.
 
-It combines a [desktop application](https://mockoon.com/download/) to design and run mock servers locally, and a [CLI](https://mockoon.com/cli/) to self-host your fake APIs. A [cloud](#subscribe-to-mockoon-cloud) is also available to collaborate with your team, keep your data in sync, and deploy your mock APIs. 
+It combines a [desktop application](https://mockoon.com/download/) to design and run mock servers locally, and a [CLI](https://mockoon.com/cli/) to self-host your fake APIs. A [cloud](#subscribe-to-mockoon-cloud) is also available to collaborate with your team, keep your data in sync, and deploy your mock APIs.
 
-API mocking helps you speed up development and third-party API integration by reducing dependency on external services and their limitations: rate limits, costs, availability, etc. 
+API mocking helps you speed up development and third-party API integration by reducing dependency on external services and their limitations: rate limits, costs, availability, etc.
 It also allows you to test your applications in a controlled environment with predictable responses, status codes, and latencies, and easily simulate edge cases and error scenarios.
 Finally, you can onboard new team members faster by providing them with a consistent and reliable environment to test and develop their applications.
 
@@ -40,45 +38,6 @@ Mockoon offers many features:
 - HTTPS support
 
 You can check the [complete list](https://mockoon.com/features/) on the website.
-
----
-
-## Our sponsors
-
-### Platinum
-
-<div align="center" style="margin-top:20px;margin-bottom:20px;">
-  <a href="https://github.blog/2023-04-12-github-accelerator-our-first-cohort-and-whats-next/">
-      <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://mockoon.com/images/sponsors/light/github.png">
-      <source media="(prefers-color-scheme: light)" srcset="https://mockoon.com/images/sponsors/github.png">
-      <img src="https://mockoon.com/images/sponsors/light/github.png" alt="GitHub logo" />
-      </picture>
-  </a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://localazy.com/register?ref=a9CiDC61gOac-azO">
-      <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://mockoon.com/images/sponsors/light/localazy.png">
-      <source media="(prefers-color-scheme: light)" srcset="https://mockoon.com/images/sponsors/localazy.png">
-      <img src="https://mockoon.com/images/sponsors/light/localazy.png" alt="Localazy logo" />
-      </picture>
-  </a>
-</div>
-
-### Silver
-
-<div align="center" style="margin-top:20px;margin-bottom:20px;">  
-  <a href="https://www.emqx.io/">  
-      <img src="https://mockoon.com/images/sponsors/emqx.png" alt="emqx logo" />
-  </a>
-</div>
-
-Mockoon is an open-source project built by volunteer maintainers. If you like our application, please consider sponsoring us and join all the [Sponsors and Backers](https://github.com/mockoon/mockoon/blob/main/backers.md) who helped this project over time!
-
-<div align="center" style="margin-top:20px;margin-bottom:20px;">
-<a href="https://github.com/sponsors/mockoon"><img src="https://mockoon.com/images/sponsor-btn.png?" width="250" alt="sponsor button" /></a>
-</div>
-
----
 
 ## Download the desktop application
 
@@ -109,12 +68,62 @@ Mockoon's Serverless [NPM package](https://www.npmjs.com/package/@mockoon/server
 
 Please check our [dedicated documentation](https://github.com/mockoon/mockoon/blob/main/packages/serverless/README.md) to learn how to use it.
 
+## Support us!
+
+Mockoon is proudly **independent** and **open-source**, maintained without external funding. We rely on both **sponsorships** and **Mockoon Cloud subscriptions** to keep improving the project and building new features. A **big thank you** to the companies below for supporting our work and helping us grow (and all the [sponsors](https://github.com/mockoon/mockoon/blob/main/backers.md) who helped this project over time!):
+
+### Platinum
+
+<div align="center" style="margin-top:20px;margin-bottom:20px;">
+  <a href="https://github.blog/2023-04-12-github-accelerator-our-first-cohort-and-whats-next/">
+      <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://mockoon.com/images/sponsors/light/github.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://mockoon.com/images/sponsors/github.png">
+      <img src="https://mockoon.com/images/sponsors/light/github.png" alt="GitHub logo" />
+      </picture>
+  </a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://localazy.com/register?ref=a9CiDC61gOac-azO">
+      <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://mockoon.com/images/sponsors/light/localazy.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://mockoon.com/images/sponsors/localazy.png">
+      <img src="https://mockoon.com/images/sponsors/light/localazy.png" alt="Localazy logo" />
+      </picture>
+  </a>
+</div>
+
+### Gold
+
+<div align="center" style="margin-top:20px;margin-bottom:20px;">
+ 
+  <a href="https://www.lambdatest.com/">
+      <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://mockoon.com/images/sponsors/light/lambdatest.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://mockoon.com/images/sponsors/lambdatest.png">
+      <img src="https://mockoon.com/images/sponsors/light/lambdatest.png" alt="Lambdatest logo" />
+      </picture>
+  </a>
+</div>
+
+### Silver
+
+<div align="center" style="margin-top:20px;margin-bottom:20px;">  
+  <a href="https://www.emqx.io/">  
+      <img src="https://mockoon.com/images/sponsors/emqx.png" alt="emqx logo" />
+  </a>
+</div>
+
+If you'd like to **support Mockoon** as well, you can **become a sponsor** or **subscribe to Mockoon Cloud**, every contribution helps keep the project alive and evolving. Thank you!
+
+<div align="center" style="margin-top:20px;margin-bottom:20px;">
+<a href="https://github.com/sponsors/mockoon"><img src="https://mockoon.com/images/sponsor-btn.png?" width="250" alt="sponsor button" /></a>
+</div>
+
 ## Subscribe to Mockoon Cloud
 
 With advanced features for solo developers and teams, Mockoon Cloud supercharges your API development:
 
-- ☁️ [cloud deployments](https://mockoon.com/docs/latest/mockoon-cloud/api-mock-cloud-deployments/)
-- 🔄️ [data synchronization and real-time collaboration](https://mockoon.com/docs/latest/mockoon-cloud/data-synchronization-team-collaboration/)
+- ☁️ [cloud deployments](https://mockoon.com/cloud/docs/api-mock-cloud-deployments/)
+- 🔄️ [data synchronization and real-time collaboration](https://mockoon.com/cloud/docs/data-synchronization-team-collaboration/)
 - 🤖 [AI powered API mocking](https://mockoon.com/ai-powered-api-mocking/)
 - 📃 Access to dozens of [ready-to-use JSON templates](https://mockoon.com/templates/).
 - 💬 Priority support and training.
@@ -135,7 +144,7 @@ You will find Mockoon applications [changelogs](https://mockoon.com/releases/) o
 
 ## Support/feedback
 
-You can discuss all things related to Mockoon and ask for help on the [official community](https://github.com/mockoon/mockoon/discussions). It's also a good place to discuss bugs and feature requests before opening an issue on this repository. For more chat-like discussions, you can also join our [Discord server](https://discord.gg/FtJjkejKGp).
+You can discuss all things related to Mockoon and ask for help on the [official community](https://github.com/mockoon/mockoon/discussions). It's also a good place to discuss bugs and feature requests before opening an issue on this repository.
 
 ## Contributing
 
@@ -145,6 +154,4 @@ Please also take a look at our [Code of Conduct](https://github.com/mockoon/mock
 
 ## Roadmap
 
-If you want to know what will be coming in the next release you can check the global [Roadmap](https://mockoon.com/public-roadmap/).
-
-New releases will be announced on Mockoon's [Twitter account @GetMockoon](https://twitter.com/GetMockoon) and through the newsletter to which you can subscribe [here](https://mockoon.com/newsletter/).
+If you want to know what will be coming in the next release you can check the global [Roadmap](https://mockoon.com/public-roadmap/) or [subscribe to our newsletter](https://mockoon.com/newsletter/).

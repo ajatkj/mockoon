@@ -151,6 +151,23 @@ describe('Template parser', () => {
       });
       strictEqual(parseResult, 'item_10item_20');
     });
+
+    it('should concat arrays', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content:
+          "{{{stringify (concat (array 'item1' 'item2') (array 'item3' 'item4') (array 'item5'))}}}",
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {} as any,
+        envVarsPrefix: ''
+      });
+      strictEqual(
+        parseResult,
+        '[\n  "item1",\n  "item2",\n  "item3",\n  "item4",\n  "item5"\n]'
+      );
+    });
   });
 
   describe('Helper: setVar', () => {
@@ -2617,7 +2634,9 @@ describe('Template parser', () => {
             parsed: true,
             value: {
               myarr: [1, 2, 3]
-            }
+            },
+            uuid: '',
+            validJson: true
           }
         ],
         globalVariables: {},
@@ -2914,7 +2933,9 @@ describe('Template parser', () => {
             id: 'abc1',
             name: 'db1',
             parsed: true,
-            value: [{ id: 1, value: 'value1' }]
+            value: [{ id: 1, value: 'value1' }],
+            uuid: '',
+            validJson: true
           }
         ],
         globalVariables: {},
@@ -2934,7 +2955,9 @@ describe('Template parser', () => {
             id: 'abc1',
             name: 'db1',
             parsed: true,
-            value: [{ id: 1, value: 'value1' }]
+            value: [{ id: 1, value: 'value1' }],
+            uuid: '',
+            validJson: true
           }
         ],
         globalVariables: {},
@@ -2995,6 +3018,34 @@ describe('Template parser', () => {
           2
         )
       );
+    });
+  });
+
+  describe('Helper: objectMerge', () => {
+    it('should return nothing when no parameter provided', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{{ stringify (objectMerge) }}}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: { body: { test: 'value' } } as any,
+        envVarsPrefix: ''
+      });
+      strictEqual(parseResult, '');
+    });
+
+    it('should return a new object after merging multiple parameters', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{{ stringify (objectMerge (object id=12) (bodyRaw)) }}}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: { body: { test: 'value' } } as any,
+        envVarsPrefix: ''
+      });
+      strictEqual(parseResult, '{\n  "id": 12,\n  "test": "value"\n}');
     });
   });
 
@@ -3072,6 +3123,53 @@ describe('Template parser', () => {
         envVarsPrefix: ''
       });
       strictEqual(parseResult, JSON.stringify([], null, 2));
+    });
+  });
+
+  describe('Helper: find', () => {
+    it('should return the first item matching the condition', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content:
+          '{{{ stringify (find (array (object b="b1" a="a1") (object b="b2" a="a2") 3) (object b="b1")) }}}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {} as any,
+        envVarsPrefix: ''
+      });
+      strictEqual(parseResult, JSON.stringify({ a: 'a1', b: 'b1' }, null, 2));
+    });
+
+    it('should return the first item matching nested values', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content:
+          '{{{ stringify (find (array (object parent=(object child="child-val") b="b1") (object parent=(object child="child-val2") b="b2") 2 3) (object parent=(object child="child-val"))) }}}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {} as any,
+        envVarsPrefix: ''
+      });
+      strictEqual(
+        parseResult,
+        JSON.stringify({ b: 'b1', parent: { child: 'child-val' } }, null, 2)
+      );
+    });
+
+    it('should return undefined when no item matches the condition', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content:
+          '{{{ stringify (find (array (object parent=(object child="child-val") b="b1") (object parent=(object child="child-val2") b="b2") 2 3) (object parent="parent-val")) }}}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {} as any,
+        envVarsPrefix: ''
+      });
+      strictEqual(parseResult, '');
     });
   });
 
@@ -3409,6 +3507,231 @@ describe('Helper: jwt', () => {
         envVarsPrefix: ''
       });
       strictEqual(parseResult, 'HS256');
+    });
+  });
+
+  describe('objectPath', () => {
+    it('should return nothing if data param is missing', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ objectPath }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {} as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, '');
+    });
+
+    it('should return nothing if path param is missing', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ objectPath (bodyRaw)}}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: { body: {} } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, '');
+    });
+
+    it('should return default value if data is empty', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ objectPath (bodyRaw) "prop2.data" "hello" }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {
+          body: {
+            prop1: '123'
+          }
+        } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, 'hello');
+    });
+
+    it('should return value when found', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ objectPath (bodyRaw) "prop2.data" }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {
+          body: {
+            prop1: '123',
+            prop2: {
+              data: 'super'
+            }
+          }
+        } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, 'super');
+    });
+  });
+
+  describe('jsonPath', () => {
+    it('should return nothing if data param is missing', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jsonPath }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {} as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, '');
+    });
+
+    it('should return nothing if path param is missing', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jsonPath (bodyRaw)}}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: { body: {} } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, '');
+    });
+
+    it('should return default value if data is empty', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jsonPath (bodyRaw) "$.prop2.data" "hello" }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {
+          body: {
+            prop1: '123'
+          }
+        } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, 'hello');
+    });
+
+    it('should return value when found', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jsonPath (bodyRaw) "$.prop2.data" }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {
+          body: {
+            prop1: '123',
+            prop2: {
+              data: 'super'
+            }
+          }
+        } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, 'super');
+    });
+  });
+
+  describe('jmesPath', () => {
+    it('should return nothing if data param is missing', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jmesPath }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {} as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, '');
+    });
+
+    it('should return nothing if path param is missing', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jmesPath (bodyRaw)}}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: { body: {} } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, '');
+    });
+
+    it('should return default value if data is empty', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jmesPath (bodyRaw) "prop2.data" "hello" }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {
+          body: {
+            prop1: '123'
+          }
+        } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, 'hello');
+    });
+
+    it('should return value when found', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jmesPath (bodyRaw) "prop2.data" }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {
+          body: {
+            prop1: '123',
+            prop2: {
+              data: 'super'
+            }
+          }
+        } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, 'super');
+    });
+
+    it('should return value with more complex path', () => {
+      const parseResult = TemplateParser({
+        shouldOmitDataHelper: false,
+        content: '{{ jmesPath (bodyRaw) "arr[1:3]" }}',
+        environment: {} as any,
+        processedDatabuckets: [],
+        globalVariables: {},
+        request: {
+          body: {
+            arr: ['a', 'b', 'c', 'd']
+          }
+        } as any,
+        envVarsPrefix: ''
+      });
+
+      strictEqual(parseResult, 'b,c');
     });
   });
 });

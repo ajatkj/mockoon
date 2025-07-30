@@ -6,8 +6,6 @@
   <a href="https://mockoon.com/download/"><img src="https://img.shields.io/badge/Download%20app-Go-green.svg?style=flat-square&colorB=1997c6"/></a>
   <a href="https://mockoon.com/"><img src="https://img.shields.io/badge/Website-Go-green.svg?style=flat-square&colorB=1997c6"/></a>
   <a href="https://mockoon.com/newsletter/"><img src="https://img.shields.io/badge/Newsletter-Subscribe-green.svg?style=flat-square"/></a>
-  <a href="https://twitter.com/GetMockoon"><img src="https://img.shields.io/badge/Twitter_@GetMockoon-follow-blue.svg?style=flat-square&colorB=1da1f2"/></a>
-  <a href="https://discord.gg/FtJjkejKGp"><img src="https://img.shields.io/badge/Discord-go-blue.svg?style=flat-square&colorA=6c84d9&colorB=1da1f2"/></a>
   <br>
   <a href="https://www.npmjs.com/package/@mockoon/serverless"><img src="https://img.shields.io/npm/v/@mockoon/serverless.svg?style=flat-square&colorB=cb3837"/></a>
   <br>
@@ -17,7 +15,7 @@
 
 Mockoon's Serverless package provides an easy way to run Mockoon's mock APIs in cloud functions and serverless environments: AWS Lambda, GCP Functions, Firebase Functions, etc.
 
-The Serverless package supports the same features as the main [application](https://github.com/mockoon/mockoon/blob/main/packages/desktop) and [CLI](https://github.com/mockoon/mockoon/blob/main/packages/cli) (with some limitations, see below): [templating system](https://mockoon.com/docs/latest/templating/overview/), [proxy mode](https://mockoon.com/docs/latest/server-configuration/proxy-mode/), [route response rules](https://mockoon.com/docs/latest/route-responses/dynamic-rules/), etc.
+The Serverless package supports the same features as the main [application](https://github.com/mockoon/mockoon/blob/main/packages/app) and [CLI](https://github.com/mockoon/mockoon/blob/main/packages/cli) (with some limitations, see below): [templating system](https://mockoon.com/docs/latest/templating/overview/), [proxy mode](https://mockoon.com/docs/latest/server-configuration/proxy-mode/), [route response rules](https://mockoon.com/docs/latest/route-responses/dynamic-rules/), etc.
 
 ## Using this package
 
@@ -29,7 +27,7 @@ $ npm install @mockoon/serverless
 
 ### Mockoon's data file
 
-The Serverless package needs a Mockoon `Environment` object loaded from a [data file](https://mockoon.com/docs/latest/mockoon-data-files/data-storage-location/).
+The Serverless package needs a Mockoon `Environment` object loaded from a [data file](https://mockoon.com/docs/latest/mockoon-data-files/data-files-location/).
 You are responsible for loading this data file (from a URL, S3, etc.) and providing the object to the class constructor (see below).
 
 In the examples below, we will be loading the data file as if it was located next to your function's main file.
@@ -84,7 +82,7 @@ const app = new mockoon.MockoonServerless(mockEnv).firebaseApp();
 exports.app = onRequest(app);
 ```
 
-Since Firebase Functions uses GCP Functions underhood, a sighly different approach can be used with the [functions-framework-nodejs](https://github.com/GoogleCloudPlatform/functions-framework-nodejs):
+Since Firebase Functions uses GCP Functions underhood, a slightly different approach can be used with the [functions-framework-nodejs](https://github.com/GoogleCloudPlatform/functions-framework-nodejs):
 
 ```javascript
 const functions = require('@google-cloud/functions-framework');
@@ -142,17 +140,17 @@ After deploying to Netlify, any request starting with `/api/*` (e.g. `https://AP
 
 The `MockoonServerless` class accepts an optional `options` object as a second parameter. The following options are available:
 
-| Option name           | Type       | Default value | Description                                                                                                                                                            |
-| --------------------- | ---------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `logTransaction`      | `boolean`  | `false`       | [Enable full transaction logging](#transaction-logging) (see below).                                                                                                   |
-| `disabledRoutes`      | `string[]` | `[]`          | Disable route(s) by UUID or keyword present in the route's path (do not include a leading slash) or keyword present in a folder name (see [below](#disabling-routes)). |
-| `fakerOptions.locale` | `string`   | `[]`          | Faker locale (e.g. 'en', 'en_GB', etc. For supported locales, see [below](#fakerjs-options).)                                                                          |
-| `fakerOptions.seed`   | `number`   | `[]`          | Number for the Faker.js seed (e.g. 1234)                                                                                                                               |
-| `envVarsPrefix`       | `string`   | `MOCKOON_`    | [Environment variables prefix](https://mockoon.com/docs/latest/variables/environment-variables/). Pass an empty string to disable it.                                  |
-| `enableAdminApi`      | `boolean`  | `true`        | Enable (default) or disable the [Admin API](https://mockoon.com/docs/latest/admin-api/overview/).                                                                      |
-| `disableTls`          | `boolean`  | `false`       | Disable TLS. TLS configuration is part of the environment configuration (more info: https://mockoon.com/docs/latest/server-configuration/serving-over-tls/).           |
-| `maxTransactionLogs`  | `number`   | `100`         | Maximum number of transaction logs to keep in memory for retrieval via the admin API (default: 100).                                                                   |
-| `enableRandomLatency` | `boolean`  | `false`       | Randomize global and responses latencies between 0 and the specified value (default: false).                                                                           |
+| Option name           | Type       | Default value | Description                                                                                                                                                                                               |
+| --------------------- | ---------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `logTransaction`      | `boolean`  | `false`       | [Enable full transaction logging](#transaction-logging) (see below).                                                                                                                                      |
+| `disabledRoutes`      | `string[]` | `[]`          | Disable route(s) by UUID or keyword present in the route's path (do not include a leading slash) or keyword present in a folder name (see [below](#disabling-routes)). Use `['*']` to disable all routes. |
+| `fakerOptions.locale` | `string`   | `[]`          | Faker locale (e.g. 'en', 'en_GB', etc. For supported locales, see [below](#fakerjs-options).)                                                                                                             |
+| `fakerOptions.seed`   | `number`   | `[]`          | Number for the Faker.js seed (e.g. 1234)                                                                                                                                                                  |
+| `envVarsPrefix`       | `string`   | `MOCKOON_`    | [Environment variables prefix](https://mockoon.com/docs/latest/variables/environment-variables/). Pass an empty string to disable it.                                                                     |
+| `enableAdminApi`      | `boolean`  | `true`        | Enable (default) or disable the [Admin API](https://mockoon.com/docs/latest/admin-api/overview/).                                                                                                         |
+| `disableTls`          | `boolean`  | `false`       | Disable TLS. TLS configuration is part of the environment configuration (more info: https://mockoon.com/docs/latest/server-configuration/serving-over-tls/).                                              |
+| `maxTransactionLogs`  | `number`   | `100`         | Maximum number of transaction logs to keep in memory for retrieval via the admin API (default: 100).                                                                                                      |
+| `enableRandomLatency` | `boolean`  | `false`       | Randomize global and responses latencies between 0 and the specified value (default: false).                                                                                                              |
 
 Example:
 
@@ -161,6 +159,8 @@ const mockoonServerless = new mockoon.MockoonServerless(mockEnv, {
   logTransaction: true,
   // disable all routes containing 'users' in their path, and the route with UUID '0999df54-7d57-407e-9325-c18d97fea729'
   disabledRoutes: ['users', '0999df54-7d57-407e-9325-c18d97fea729'],
+  // or disable all routes
+  // disabledRoutes: ['*'],
   fakerOptions: {
     locale: 'en_GB',
     seed: 1234
@@ -249,6 +249,8 @@ This is the counterpart of the "Toggle route" feature in the desktop application
 
 For example, to disable all routes in a folder named `folder1`, and all routes having "users" in their paths, you can provide the following array `['folder1', 'users']`.
 
+To disable all routes, you can pass an array containing a single string with a wildcard: `['*']`.
+
 ## Serverless package limitations
 
 Due to the stateless nature of cloud functions, some of Mockoon's features will not work:
@@ -260,20 +262,62 @@ Due to the stateless nature of cloud functions, some of Mockoon's features will 
 
 You will find Mockoon's [documentation](https://mockoon.com/docs/latest/about/) on the official website.
 
-## Sponsors
+## Support us!
 
-Mockoon is an open-source project built by volunteer maintainers. If you like our application, please consider sponsoring us and join all the [Sponsors and Backers](https://github.com/mockoon/mockoon/blob/main/backers.md) who helped this project over time!
+Mockoon is proudly **independent** and **open-source**, maintained without external funding. We rely on both **sponsorships** and **Mockoon Cloud subscriptions** to keep improving the project and building new features. A **big thank you** to the companies below for supporting our work and helping us grow (and all the [sponsors](https://github.com/mockoon/mockoon/blob/main/backers.md) who helped this project over time!):
 
-<div align="center">
-<a href="https://github.com/sponsors/mockoon"><img src="https://mockoon.com/images/sponsor-btn.png" width="250" alt="sponsor button" /></a>
+### Platinum
+
+<div align="center" style="margin-top:20px;margin-bottom:20px;">
+  <a href="https://github.blog/2023-04-12-github-accelerator-our-first-cohort-and-whats-next/">
+      <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://mockoon.com/images/sponsors/light/github.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://mockoon.com/images/sponsors/github.png">
+      <img src="https://mockoon.com/images/sponsors/light/github.png" alt="GitHub logo" />
+      </picture>
+  </a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://localazy.com/register?ref=a9CiDC61gOac-azO">
+      <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://mockoon.com/images/sponsors/light/localazy.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://mockoon.com/images/sponsors/localazy.png">
+      <img src="https://mockoon.com/images/sponsors/light/localazy.png" alt="Localazy logo" />
+      </picture>
+  </a>
+</div>
+
+### Gold
+
+<div align="center" style="margin-top:20px;margin-bottom:20px;">
+ 
+  <a href="https://www.lambdatest.com/">
+      <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://mockoon.com/images/sponsors/light/lambdatest.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://mockoon.com/images/sponsors/lambdatest.png">
+      <img src="https://mockoon.com/images/sponsors/light/lambdatest.png" alt="Lambdatest logo" />
+      </picture>
+  </a>
+</div>
+
+### Silver
+
+<div align="center" style="margin-top:20px;margin-bottom:20px;">  
+  <a href="https://www.emqx.io/">  
+      <img src="https://mockoon.com/images/sponsors/emqx.png" alt="emqx logo" />
+  </a>
+</div>
+
+If you'd like to **support Mockoon** as well, you can **become a sponsor** or **subscribe to Mockoon Cloud**, every contribution helps keep the project alive and evolving. Thank you!
+
+<div align="center" style="margin-top:20px;margin-bottom:20px;">
+<a href="https://github.com/sponsors/mockoon"><img src="https://mockoon.com/images/sponsor-btn.png?" width="250" alt="sponsor button" /></a>
 </div>
 
 ## Subscribe to Mockoon Cloud
 
 With advanced features for solo developers and teams, Mockoon Cloud supercharges your API development:
 
-- ☁️ [cloud deployments](https://mockoon.com/docs/latest/mockoon-cloud/api-mock-cloud-deployments/)
-- 🔄️ [data synchronization and real-time collaboration](https://mockoon.com/docs/latest/mockoon-cloud/data-synchronization-team-collaboration/)
+- ☁️ [cloud deployments](https://mockoon.com/cloud/docs/api-mock-cloud-deployments/)
+- 🔄️ [data synchronization and real-time collaboration](https://mockoon.com/cloud/docs/data-synchronization-team-collaboration/)
 - 🤖 [AI powered API mocking](https://mockoon.com/ai-powered-api-mocking/)
 - 📃 Access to dozens of [ready-to-use JSON templates](https://mockoon.com/templates/).
 - 💬 Priority support and training.
@@ -286,7 +330,7 @@ Upgrade today and take your API development to the next level.
 
 ## Support/feedback
 
-You can discuss all things related to Mockoon's CLI, and ask for help, on the [official community](https://github.com/mockoon/mockoon/discussions). It's also a good place to discuss bugs and feature requests before opening an issue on this repository. For more chat-like discussions, you can also join our [Discord server](https://discord.gg/FtJjkejKGp).
+You can discuss all things related to Mockoon's CLI, and ask for help, on the [official community](https://github.com/mockoon/mockoon/discussions). It's also a good place to discuss bugs and feature requests before opening an issue on this repository.
 
 ## Contributing
 
@@ -296,6 +340,4 @@ Please also take a look at our [Code of Conduct](https://github.com/mockoon/mock
 
 ## Roadmap
 
-If you want to know what will be coming in the next release you can check the global [Roadmap](https://mockoon.com/public-roadmap/).
-
-New releases will be announced on Mockoon's [Twitter account @GetMockoon](https://twitter.com/GetMockoon) and through the newsletter to which you can subscribe [here](https://mockoon.com/newsletter/).
+If you want to know what will be coming in the next release you can check the global [Roadmap](https://mockoon.com/public-roadmap/) or [subscribe to our newsletter](https://mockoon.com/newsletter/).
